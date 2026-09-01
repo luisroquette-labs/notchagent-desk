@@ -2,18 +2,23 @@
 set -euo pipefail
 
 sketch_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$sketch_dir/../../tools/semver.sh"
 release_dir="${1:-$sketch_dir/release}"
 manifest="$release_dir/manifest.json"
 [[ -f "$manifest" ]] || { echo "Invalid firmware package: manifest missing." >&2; exit 1; }
 
 jq -e '
-  .schemaVersion == 2 and .chip == "esp32s3" and .imageAddress == 0 and
+  .schemaVersion == 3 and .chip == "esp32s3" and .imageAddress == 0 and
+  .hardwareModel == "waveshare-esp32-s3-touch-lcd-7b" and
   .imageFile == "NotchAgentDesk-factory.bin" and .flasherFile == "esptool" and
-  (.firmwareVersion | test("^[0-9]+\\.[0-9]+\\.[0-9]+$")) and
+  (.firmwareVersion | type == "string") and
   (.imageSHA256 | test("^[0-9a-f]{64}$")) and
   (.sourceSHA256 | test("^[0-9a-f]{64}$")) and
   (.flasherSHA256 | test("^[0-9a-f]{64}$"))
 ' "$manifest" >/dev/null || { echo "Invalid firmware manifest." >&2; exit 1; }
+
+firmware_version="$(jq -er '.firmwareVersion' "$manifest")"
+is_desk_semver "$firmware_version" || { echo "Invalid firmware SemVer." >&2; exit 1; }
 
 image="$release_dir/NotchAgentDesk-factory.bin"
 flasher="$release_dir/esptool"

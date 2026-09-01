@@ -11,6 +11,11 @@ Status definitions:
 | Beta 1 | 0.6.16 | 1.1 | NotchAgent 3.1.2+ | Beta | Beta | ESP32-S3 7" rev A |
 | Beta 1 | 0.7.0 | 1.2 | NotchAgent 3.3.0+ | Beta | Beta | ESP32-S3 7" rev A |
 | Beta 1 | 0.8.0 | 1.3 | NotchAgent 3.4.0+ | Beta | Beta | ESP32-S3 7" rev A |
+| Rev A alpha | 1.0.0-alpha.1 | 1.4 | Integration pending | Unsupported | Unsupported | Waveshare ESP32-S3-Touch-LCD-7B |
+
+The historical `ESP32-S3 7" rev A` rows above are now classified as the
+Guition 480x320 **Legacy Prototype**. Their released artifacts remain immutable;
+the current Rev A name belongs only to the Waveshare 7B target.
 
 ## macOS promotion gate
 

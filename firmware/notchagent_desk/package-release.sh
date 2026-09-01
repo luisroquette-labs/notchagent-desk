@@ -4,10 +4,11 @@ set -euo pipefail
 export ARDUINO_DIRECTORIES_USER="${ARDUINO_DIRECTORIES_USER:-${NOTCHAGENT_ARDUINO_USER_DIR:-${HOME:?}/Library/Application Support/NotchAgent/Arduino}}"
 
 sketch_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$sketch_dir/../../tools/semver.sh"
 "$sketch_dir/verify-toolchain.sh" >/dev/null
 release_dir="$sketch_dir/release"
-firmware_version="$(sed -n 's/^#define DESK_FW_VERSION "\([0-9][0-9.]*\)"$/\1/p' "$sketch_dir/config.h")"
-[[ "$firmware_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+firmware_version="$(sed -n 's/^#define DESK_FW_VERSION "\([0-9A-Za-z.-]*\)"$/\1/p' "$sketch_dir/config.h")"
+is_desk_semver "$firmware_version" || {
   echo "Invalid DESK_FW_VERSION" >&2
   exit 2
 }
@@ -22,15 +23,16 @@ esptool_license="$(dirname "$esptool_path")/LICENSE"
 source_sha=$(
   cd "$sketch_dir"
   shasum -a 256 \
-    config.h desk_protocol.h lv_conf.h notchagent_desk.ino \
+    board.h config.h desk_protocol.h display.h lv_conf.h notchagent_desk.ino \
     consume-stdin.sh package-release.sh package_manifest.swift partitions.csv touch.h \
-    trim_factory.swift verify-toolchain.sh \
+    trim_factory.swift verify-toolchain.sh ../../tools/semver.sh \
     | shasum -a 256 | awk '{print $1}'
 )
 if [[ -f "$release_dir/manifest.json" && -f "$release_dir/NotchAgentDesk-factory.bin" &&
       -x "$release_dir/esptool" && -f "$release_dir/esptool-LICENSE.txt" ]] &&
    jq -e --arg version "$firmware_version" --arg sourceSHA256 "$source_sha" '
-     .schemaVersion == 2 and .firmwareVersion == $version and .sourceSHA256 == $sourceSHA256
+     .schemaVersion == 3 and .hardwareModel == "waveshare-esp32-s3-touch-lcd-7b" and
+     .firmwareVersion == $version and .sourceSHA256 == $sourceSHA256
    ' "$release_dir/manifest.json" >/dev/null 2>&1 &&
    "$sketch_dir/verify-release.sh" "$release_dir" >/dev/null 2>&1; then
   echo "Reusing verified NotchAgent Desk firmware $firmware_version for source $source_sha"

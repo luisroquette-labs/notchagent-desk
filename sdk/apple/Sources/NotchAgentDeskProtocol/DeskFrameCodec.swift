@@ -3,8 +3,11 @@ import Foundation
 public enum DeskProtocolContract {
     public static let product = "NotchAgent Desk"
     public static let major: UInt8 = 1
-    public static let minor: UInt8 = 1
+    public static let minor: UInt8 = 4
     public static let maximumPayloadBytes = 16 * 1_024
+    public static let revAHardwareModel = "waveshare-esp32-s3-touch-lcd-7b"
+    public static let revAHardwareRevision = "rev-a"
+    public static let revADisplayProfile = "rgb565-1024x600"
 }
 
 public enum DeskFrameType: UInt8, Sendable {

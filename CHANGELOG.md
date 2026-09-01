@@ -6,6 +6,23 @@ All notable changes to NotchAgent Desk are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0-alpha.1] - 2026-09-01
+
+### Changed
+
+- Rev A now identifies the Waveshare ESP32-S3-Touch-LCD-7B 1024x600 target.
+- The Guition 480x320 / AXS15231B hardware is classified as Legacy Prototype
+  and remains recoverable through immutable firmware `0.8.0`.
+- Firmware packaging accepts the documented `alpha`, `beta`, and `rc`
+  prerelease versions.
+- Protocol 1.4 and manifest schema 3 bind Rev A firmware to the exact Waveshare
+  hardware model instead of the shared USB VID/PID.
+
+### Note
+
+- Display-driver migration and physical qualification are still pending; this
+  prerelease must not be promoted or marketed as stable.
+
 ### Note
 
 - No firmware change required for the host's 3.5.2–3.5.4 Codex
@@ -85,7 +102,8 @@ All notable changes to NotchAgent Desk are documented here. The format follows
 - The device receives sanitized snapshots only: no credentials, prompts,
   account identifiers, monetary amounts, or local file paths.
 
-[Unreleased]: https://github.com/luisroquette/notchagent-desk/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/luisroquette/notchagent-desk/compare/v1.0.0-alpha.1...HEAD
+[1.0.0-alpha.1]: https://github.com/luisroquette/notchagent-desk/compare/v0.8.0...v1.0.0-alpha.1
 [0.8.0]: https://github.com/luisroquette/notchagent-desk/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/luisroquette/notchagent-desk/compare/v0.6.16...v0.7.0
 [0.6.16]: https://github.com/luisroquette/notchagent-desk/releases/tag/v0.6.16

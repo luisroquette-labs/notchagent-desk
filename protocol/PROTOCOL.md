@@ -1,4 +1,4 @@
-# NotchAgent Desk USB protocol 1.3
+# NotchAgent Desk USB protocol 1.4
 
 ## Transport
 
@@ -28,8 +28,24 @@ The host sends a random nonce in `hello`. The device must return the same nonce,
 the exact product string `NotchAgent Desk`, firmware version, and protocol
 version. Major mismatches fail closed.
 
+Protocol 1.4 devices may add bounded `hardwareModel`, `hardwareRevision`, and
+`displayProfile` strings to the hello acknowledgement and device telemetry.
+Rev A declares exactly:
+
+- `hardwareModel`: `waveshare-esp32-s3-touch-lcd-7b`
+- `hardwareRevision`: `rev-a`
+- `displayProfile`: `rgb565-1024x600`
+
+Their absence means a protocol 1.3 or older device, not Rev A. Hosts must not
+infer hardware identity from a USB path or VID/PID. Firmware installation
+requires exact equality between authenticated handshake and manifest; unknown
+or missing hardware fails closed. Recovery without a handshake requires an
+explicit model selection and confirmation.
+
 ## Snapshot additions by protocol version
 
+- **1.4** — hello acknowledgement and telemetry add the optional hardware
+  identity fields above. Snapshot payload is unchanged.
 - **1.3** — snapshot payload adds optional `currentHour` (int) and
   `currentHourElapsedFraction` (double, 0–1). A host on protocol 1.2 or older
   does not send them; devices must read their absence as "no current-hour
@@ -43,4 +59,3 @@ Snapshots may contain provider IDs, bounded quota metrics, timestamps, token
 totals, aggregate health, burn/rhythm points, and model labels. They must not
 contain credentials, prompts, account IDs or labels, financial amounts, raw
 errors, device serials, or local file paths.
-

@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * GT911 register flow derived from Espressif/Waveshare examples at c652c902.
+ * Modified for NotchAgent Desk: minimal single-pointer LVGL adapter.
+ */
 #pragma once
 
 #include <Arduino.h>
@@ -7,50 +12,60 @@ class DeskTouch {
  public:
   bool begin() {
     instance_ = this;
-    pinMode(DESK_TOUCH_INTERRUPT, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(DESK_TOUCH_INTERRUPT), onInterrupt, FALLING);
-    if (!Wire.begin(DESK_TOUCH_SDA, DESK_TOUCH_SCL, 400000)) return false;
-    Wire.beginTransmission(DESK_TOUCH_ADDRESS);
-    controllerPresent_ = Wire.endTransmission() == 0;
-    const BaseType_t created = xTaskCreatePinnedToCore(
-      taskEntry, "desk-touch", 4096, this, 1, &taskHandle_, 0
-    );
-    return controllerPresent_ && created == pdPASS;
+    uint8_t product[3] = {};
+    controllerPresent_ = readRegister(0x8140, product, sizeof(product));
+    return controllerPresent_;
   }
 
   bool read(uint16_t &x, uint16_t &y) {
-    portENTER_CRITICAL(&mux_);
-    if (!pointPending_) {
-      portEXIT_CRITICAL(&mux_);
+    const uint32_t now = millis();
+    const bool interrupted = interruptPending_;
+    if (!interrupted && now - lastPollAtMs_ < DESK_TOUCH_POLL_INTERVAL_MS) return false;
+    interruptPending_ = false;
+    if (!interrupted) {
+      lastPollAtMs_ = now;
+      ++pollAttemptCount_;
+    }
+
+    uint8_t status = 0;
+    if (!readRegister(0x814E, &status, 1)) return readFailed();
+    const uint8_t points = status & 0x0F;
+    if (!(status & 0x80)) return false;
+    if (points == 0 || points > 5) {
+      if (!writeRegister(0x814E, 0)) return readFailed();
       return false;
     }
-    x = pointX_;
-    y = pointY_;
-    pointPending_ = false;
-    portEXIT_CRITICAL(&mux_);
+
+    uint8_t point[8] = {};
+    if (!readRegister(0x814F, point, sizeof(point)) || !writeRegister(0x814E, 0)) {
+      return readFailed();
+    }
+    x = min<uint16_t>(point[1] | (point[2] << 8), DESK_SCREEN_WIDTH - 1);
+    y = min<uint16_t>(point[3] | (point[4] << 8), DESK_SCREEN_HEIGHT - 1);
+    controllerPresent_ = true;
+    ++touchCount_;
+    if (!interrupted) ++pollTouchCount_;
+    lastLatencyMicros_ = interrupted ? micros() - interruptAtMicros_ : 0;
+    maxLatencyMicros_ = max(maxLatencyMicros_, lastLatencyMicros_);
     return true;
   }
 
-  uint32_t touchCount() const { return synchronized(touchCount_); }
-  uint32_t interruptCount() const { return synchronized(interruptCount_); }
-  uint32_t readErrorCount() const { return synchronized(readErrorCount_); }
-  uint32_t pollAttemptCount() const { return synchronized(pollAttemptCount_); }
-  uint32_t pollTouchCount() const { return synchronized(pollTouchCount_); }
-  bool controllerPresent() const { return synchronized(controllerPresent_); }
-  uint32_t lastLatencyMicros() const { return synchronized(lastLatencyMicros_); }
-  uint32_t maxLatencyMicros() const { return synchronized(maxLatencyMicros_); }
+  uint32_t touchCount() const { return touchCount_; }
+  uint32_t interruptCount() const { return interruptCount_; }
+  uint32_t readErrorCount() const { return readErrorCount_; }
+  uint32_t pollAttemptCount() const { return pollAttemptCount_; }
+  uint32_t pollTouchCount() const { return pollTouchCount_; }
+  bool controllerPresent() const { return controllerPresent_; }
+  uint32_t lastLatencyMicros() const { return lastLatencyMicros_; }
+  uint32_t maxLatencyMicros() const { return maxLatencyMicros_; }
 
  private:
   inline static DeskTouch *instance_ = nullptr;
-  mutable portMUX_TYPE mux_ = portMUX_INITIALIZER_UNLOCKED;
-  TaskHandle_t taskHandle_ = nullptr;
-  bool interruptPending_ = false;
-  uint32_t pendingAtMicros_ = 0;
-  bool pointPending_ = false;
-  uint16_t pointX_ = 0;
-  uint16_t pointY_ = 0;
+  volatile bool interruptPending_ = false;
+  volatile uint32_t interruptAtMicros_ = 0;
+  volatile uint32_t interruptCount_ = 0;
   uint32_t touchCount_ = 0;
-  uint32_t interruptCount_ = 0;
   uint32_t readErrorCount_ = 0;
   uint32_t pollAttemptCount_ = 0;
   uint32_t pollTouchCount_ = 0;
@@ -59,96 +74,34 @@ class DeskTouch {
   uint32_t lastLatencyMicros_ = 0;
   uint32_t maxLatencyMicros_ = 0;
 
-  template <typename T>
-  T synchronized(const T &value) const {
-    portENTER_CRITICAL(&mux_);
-    const T copy = value;
-    portEXIT_CRITICAL(&mux_);
-    return copy;
-  }
-
-  static void taskEntry(void *context) {
-    auto *touch = static_cast<DeskTouch *>(context);
-    while (true) {
-      touch->sample();
-      vTaskDelay(pdMS_TO_TICKS(5));
-    }
-  }
-
-  void sample() {
-    const uint32_t nowMs = millis();
-    portENTER_CRITICAL(&mux_);
-    const bool hadInterrupt = interruptPending_;
-    const uint32_t interruptAtMicros = pendingAtMicros_;
-    interruptPending_ = false;
-    portEXIT_CRITICAL(&mux_);
-    const bool shouldProbe = nowMs - lastPollAtMs_ >= DESK_TOUCH_POLL_INTERVAL_MS;
-    if (!hadInterrupt && !shouldProbe) return;
-    if (!hadInterrupt) {
-      lastPollAtMs_ = nowMs;
-      portENTER_CRITICAL(&mux_);
-      ++pollAttemptCount_;
-      portEXIT_CRITICAL(&mux_);
-      Wire.beginTransmission(DESK_TOUCH_ADDRESS);
-      const bool present = Wire.endTransmission() == 0;
-      portENTER_CRITICAL(&mux_);
-      controllerPresent_ = present;
-      if (!present) ++readErrorCount_;
-      portEXIT_CRITICAL(&mux_);
-      return;
-    }
-    // This is the exact command validated by the board's known-good bring-up.
-    // Coordinate reads are IRQ-driven; periodic traffic only probes the I2C
-    // address so an idle panel cannot manufacture touch samples.
-    const uint32_t elapsedSinceInterrupt = micros() - interruptAtMicros;
-    if (elapsedSinceInterrupt < DESK_TOUCH_SETTLE_US) {
-      delayMicroseconds(DESK_TOUCH_SETTLE_US - elapsedSinceInterrupt);
-    }
-    static const uint8_t command[8] = {0xB5, 0xAB, 0xA5, 0x5A, 0, 0, 0, 8};
+  bool readRegister(uint16_t reg, uint8_t *bytes, size_t count) {
     Wire.beginTransmission(DESK_TOUCH_ADDRESS);
-    Wire.write(command, sizeof(command));
-    if (Wire.endTransmission() != 0) {
-      portENTER_CRITICAL(&mux_);
-      controllerPresent_ = false;
-      ++readErrorCount_;
-      portEXIT_CRITICAL(&mux_);
-      return;
-    }
-    if (Wire.requestFrom(DESK_TOUCH_ADDRESS, 8) != 8) {
-      portENTER_CRITICAL(&mux_);
-      controllerPresent_ = false;
-      ++readErrorCount_;
-      portEXIT_CRITICAL(&mux_);
-      return;
-    }
-    uint8_t response[8];
-    for (uint8_t &value : response) value = Wire.read();
-    const uint32_t sampledAtMicros = micros();
-    const uint16_t rawX = (static_cast<uint16_t>(response[2] & 0x0F) << 8) | response[3];
-    const uint16_t rawY = (static_cast<uint16_t>(response[4] & 0x0F) << 8) | response[5];
-    portENTER_CRITICAL(&mux_);
-    controllerPresent_ = true;
-    if (!rawX && !rawY) {
-      portEXIT_CRITICAL(&mux_);
-      return;
-    }
-    const uint32_t latency = sampledAtMicros - interruptAtMicros;
-    lastLatencyMicros_ = latency;
-    maxLatencyMicros_ = max(maxLatencyMicros_, latency);
-    ++touchCount_;
-    pointX_ = min<uint16_t>(DESK_SCREEN_WIDTH - 1, DESK_SCREEN_WIDTH - 1 - rawY);
-    pointY_ = min<uint16_t>(DESK_SCREEN_HEIGHT - 1, rawX);
-    pointPending_ = true;
-    portEXIT_CRITICAL(&mux_);
+    Wire.write(static_cast<uint8_t>(reg >> 8));
+    Wire.write(static_cast<uint8_t>(reg));
+    if (Wire.endTransmission(false) != 0) return false;
+    if (Wire.requestFrom(DESK_TOUCH_ADDRESS, count) != count) return false;
+    for (size_t i = 0; i < count; ++i) bytes[i] = Wire.read();
+    return true;
+  }
+
+  bool writeRegister(uint16_t reg, uint8_t value) {
+    Wire.beginTransmission(DESK_TOUCH_ADDRESS);
+    Wire.write(static_cast<uint8_t>(reg >> 8));
+    Wire.write(static_cast<uint8_t>(reg));
+    Wire.write(value);
+    return Wire.endTransmission() == 0;
+  }
+
+  bool readFailed() {
+    controllerPresent_ = false;
+    ++readErrorCount_;
+    return false;
   }
 
   static void ARDUINO_ISR_ATTR onInterrupt() {
-    if (instance_) {
-      portENTER_CRITICAL_ISR(&instance_->mux_);
-      ++instance_->interruptCount_;
-      instance_->pendingAtMicros_ = micros();
-      instance_->interruptPending_ = true;
-      portEXIT_CRITICAL_ISR(&instance_->mux_);
-    }
+    if (!instance_) return;
+    instance_->interruptAtMicros_ = micros();
+    instance_->interruptPending_ = true;
+    ++instance_->interruptCount_;
   }
 };

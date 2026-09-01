@@ -8,20 +8,24 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   contract:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Validate release and privacy contracts
-        run: ./tools/check-release-contract.sh
+        run: ./tools/preflight.sh contract
 
   apple-protocol:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Test Swift protocol SDK
-        run: swift test --package-path sdk/apple
+        run: ./tools/preflight.sh apple
 
   windows-protocol:
     runs-on: windows-latest
@@ -31,7 +35,8 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - name: Test .NET protocol SDK
-        run: dotnet test sdk/dotnet/NotchAgent.Desk.Protocol.Tests/NotchAgent.Desk.Protocol.Tests.csproj --configuration Release
+        shell: bash
+        run: ./tools/preflight.sh windows
 
   firmware:
     runs-on: macos-15
@@ -48,4 +53,4 @@ jobs:
           arduino-cli core install esp32:esp32@3.3.8 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli lib install "ArduinoJson@7.2.0" "GFX Library for Arduino@1.6.5" "lvgl@9.2.2"
       - name: Build firmware
-        run: firmware/notchagent_desk/build.sh build
+        run: ./tools/preflight.sh firmware
