@@ -1,7 +1,9 @@
 # NotchAgent Desk firmware
 
-USB-only companion firmware for the ESP32-S3 7-inch display board (1024x600,
-capacitive touch, 5-point). The NotchAgent host remains the only source of usage data and
+USB-only companion firmware being migrated to NotchAgent Desk Rev A: Waveshare
+ESP32-S3-Touch-LCD-7B (1024x600, capacitive touch, 5-point). The checked-in
+display adapter is still the Legacy Prototype Guition 480x320 / AXS15231B until
+the Rev A migration lands. The NotchAgent host remains the only source of usage data and
 credentials: macOS and Windows Desk paths remain beta until their physical
 release gates pass. See [`../../COMPATIBILITY.md`](../../COMPATIBILITY.md).
 

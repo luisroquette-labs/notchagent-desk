@@ -2,8 +2,9 @@ import CryptoKit
 import Foundation
 
 struct Manifest: Codable {
-    var schemaVersion = 2
+    var schemaVersion = 3
     var firmwareVersion: String
+    var hardwareModel = "waveshare-esp32-s3-touch-lcd-7b"
     var chip = "esp32s3"
     var imageFile = "NotchAgentDesk-factory.bin"
     var imageAddress: UInt32 = 0

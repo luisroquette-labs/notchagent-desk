@@ -6,8 +6,11 @@ public static class DeskProtocolContract
 {
     public const string Product = "NotchAgent Desk";
     public const byte Major = 1;
-    public const byte Minor = 1;
+    public const byte Minor = 4;
     public const int MaximumPayloadBytes = 16 * 1024;
+    public const string RevAHardwareModel = "waveshare-esp32-s3-touch-lcd-7b";
+    public const string RevAHardwareRevision = "rev-a";
+    public const string RevADisplayProfile = "rgb565-1024x600";
 }
 
 public enum DeskFrameType : byte

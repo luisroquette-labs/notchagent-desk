@@ -3,6 +3,8 @@ import Testing
 @testable import NotchAgentDeskProtocol
 
 @Test func frameRoundTrip() throws {
+    #expect(DeskProtocolContract.minor == 4)
+    #expect(DeskProtocolContract.revAHardwareModel == "waveshare-esp32-s3-touch-lcd-7b")
     let payload = Data(#"{"product":"NotchAgent Desk","nonce":42}"#.utf8)
     let encoded = try DeskFrameCodec.encode(.init(type: .hello, sequence: 7, payload: payload))
     #expect(encoded.last == 0)
@@ -26,4 +28,3 @@ import Testing
         try DeskFrameCodec.decodePacket(encoded.dropLast())
     }
 }
-

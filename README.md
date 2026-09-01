@@ -7,13 +7,13 @@
 </p>
 
 <p align="center">
-  <a href="https://img.shields.io/badge/version-v0.8.0-FF654F?style=flat-square"><img src="https://img.shields.io/badge/version-v0.8.0-FF654F?style=flat-square" alt="Version v0.8.0"></a>
-  <a href="protocol/PROTOCOL.md"><img src="https://img.shields.io/badge/protocol-1.3-C9A7FF?style=flat-square" alt="Protocol 1.3"></a>
+  <a href="VERSION"><img src="https://img.shields.io/badge/version-v1.0.0--alpha.1-FF654F?style=flat-square" alt="Version v1.0.0-alpha.1"></a>
+  <a href="protocol/PROTOCOL.md"><img src="https://img.shields.io/badge/protocol-1.4-C9A7FF?style=flat-square" alt="Protocol 1.4"></a>
   <a href="https://luisroquette.github.io/notchagent-desk/"><img src="https://img.shields.io/badge/product-page-live-38D6C7?style=flat-square" alt="Product page"></a>
   <a href="https://cfgauss.com.br/shop/notchagent-desk"><img src="https://img.shields.io/badge/buy-R%24_699%2C90-FF654F?style=flat-square" alt="Buy: R$ 699,90"></a>
 </p>
 
-NotchAgent Desk is the physical companion for
+NotchAgent Desk Rev A is the physical companion for
 [NotchAgent](https://github.com/luisroquette/notchagent): a handmade 7-inch
 capacitive touch display (1024x600) that turns your local Claude Code and Codex quota data into
 a touch-first instrument — **NOW · BURN · RHYTHM · MODELS** — powered by an
@@ -71,8 +71,8 @@ assembly — on the product page: **[luisroquette.github.io/notchagent-desk](htt
 Claude Code / Codex local data
            ↓
 NotchAgent host app (Mac or Windows)
-           ↓  sanitized snapshot · USB CDC · protocol 1.3
-NotchAgent Desk firmware 0.8.0
+           ↓  sanitized snapshot · USB CDC · protocol 1.4
+NotchAgent Desk Rev A firmware 1.0.0-alpha.1
            ↓
 NOW · BURN · RHYTHM · MODELS
 ```
@@ -83,8 +83,12 @@ NOW · BURN · RHYTHM · MODELS
   notarized host app; the 24-hour physical soak and customer pilot remain open.
 - **Windows 10/11 x64:** beta host path; protocol builds on Windows CI, physical
   USB/DPI/tray validation remains a release gate.
-- **Firmware:** `0.8.0` on the 7-inch 1024x600 capacitive touch board / ESP32-S3.
-- **Wire protocol:** `1.3`; major versions must match.
+- **Rev A target:** Waveshare ESP32-S3-Touch-LCD-7B, 1024x600 capacitive touch;
+  firmware `1.0.0-alpha.1` is under development and not physically qualified.
+- **Legacy Prototype:** Guition 480x320 / AXS15231B remains recoverable with the
+  immutable `0.8.0` release.
+- **Rev B:** future coexisting variant, outside this development cycle.
+- **Wire protocol:** `1.4`; major versions must match.
 
 See [`COMPATIBILITY.md`](COMPATIBILITY.md) before claiming a platform as supported.
 

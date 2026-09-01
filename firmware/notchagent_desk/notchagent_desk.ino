@@ -1,10 +1,11 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <Arduino_GFX_Library.h>
 #include <inttypes.h>
 #include <lvgl.h>
 #include "config.h"
+#include "board.h"
 #include "desk_protocol.h"
+#include "display.h"
 #include "touch.h"
 
 namespace {
@@ -30,17 +31,17 @@ constexpr int kPageCount = 4;
 // Burn-forecast chart plot area, in burnCard-local pixels. Shared by
 // updateBurnLines() (drawing) and burnScrubEvent() (touch readout) so the
 // two can never drift apart.
-constexpr int kBurnChartLeft = 14;
-constexpr int kBurnChartRight = 450;
-constexpr int kBurnChartTop = 40;
-constexpr int kBurnChartBottom = 208;
+constexpr int kBurnChartLeft = 28;
+constexpr int kBurnChartRight = 970;
+constexpr int kBurnChartTop = 68;
+constexpr int kBurnChartBottom = 430;
 // RHYTHM page's hourly-bar plot area, in pages[2]-local pixels. Shared by
 // the refresh loop (drawing) and rhythmScrubEvent() (touch readout).
-constexpr int kRhythmChartLeft = 5;
-constexpr int kRhythmBarPitch = 19;
-constexpr int kRhythmBarWidth = 11;
-constexpr int kRhythmChartBaseline = 195;
-constexpr int kRhythmChartMaxBarHeight = 88;
+constexpr int kRhythmChartLeft = 14;
+constexpr int kRhythmBarPitch = 40;
+constexpr int kRhythmBarWidth = 26;
+constexpr int kRhythmChartBaseline = 410;
+constexpr int kRhythmChartMaxBarHeight = 220;
 // Below this, the current hour has barely started — extrapolating its
 // so-far total to a full hour would swing wildly. Same threshold and same
 // reasoning as RhythmChartView.currentHourGraceFraction on the macOS app,
@@ -113,8 +114,6 @@ uint32_t fpsWindowStartedAt = 0;
 float measuredFPS = 0;
 uint64_t snapshotEpochMs = 0;
 
-Arduino_Canvas *canvas = nullptr;
-uint16_t *canvasPixels = nullptr;
 DeskTouch touch;
 lv_obj_t *pages[kPageCount] = {};
 lv_obj_t *navButtons[kPageCount] = {};
@@ -127,7 +126,10 @@ lv_obj_t *providerValues[2] = {};
 lv_obj_t *providerCaptions[2] = {};
 lv_obj_t *providerDetails[2] = {};
 lv_obj_t *providerStatuses[2] = {};
+lv_obj_t *providerResets[2] = {};
 lv_obj_t *providerGauge[2][10] = {};
+lv_obj_t *nowBurnSummary = nullptr;
+lv_obj_t *nowModelSummary = nullptr;
 lv_obj_t *burnProvider = nullptr;
 lv_obj_t *burnLines[4] = {};
 lv_obj_t *burnLineLabels[4] = {};
@@ -276,15 +278,8 @@ lv_obj_t *surface(lv_obj_t *parent, int x, int y, int width, int height, int rad
   return object;
 }
 
-void displayFlush(lv_display_t *display, const lv_area_t *, uint8_t *pixels) {
-  const uint16_t *source = reinterpret_cast<uint16_t *>(pixels);
-  for (int y = 0; y < DESK_SCREEN_HEIGHT; ++y) {
-    for (int x = 0; x < DESK_SCREEN_WIDTH; ++x) {
-      canvasPixels[(DESK_SCREEN_WIDTH - 1 - x) * DESK_SCREEN_HEIGHT + y] =
-          source[y * DESK_SCREEN_WIDTH + x];
-    }
-  }
-  canvas->flush();
+void displayFlush(lv_display_t *display, const lv_area_t *area, uint8_t *pixels) {
+  desk_display::flush(display, area, pixels);
   const uint32_t renderedAt = millis();
   const uint32_t interval = lastRenderedAt ? renderedAt - lastRenderedAt : 0;
   // Only consecutive animation frames measure render cadence. Isolated dirty
@@ -363,8 +358,8 @@ void navigatePage(int page) {
     else
       lv_obj_add_flag(pages[i], LV_OBJ_FLAG_HIDDEN);
   }
-  lv_obj_set_x(pages[transitionFromPage], 8);
-  lv_obj_set_x(pages[transitionToPage], 8 + transitionDirection * 464);
+  lv_obj_set_x(pages[transitionFromPage], 12);
+  lv_obj_set_x(pages[transitionToPage], 12 + transitionDirection * 1000);
   updateNavState(page);
 }
 
@@ -375,12 +370,12 @@ void updatePageTransition() {
   // instead of a quick, slightly springy snap.
   const float progress = min(1.0f, (millis() - transitionStartedAt) / 260.0f);
   const float eased = 1.0f - powf(1.0f - progress, 4.0f);
-  lv_obj_set_x(pages[transitionFromPage], 8 - transitionDirection * static_cast<int>(464 * eased));
-  lv_obj_set_x(pages[transitionToPage], 8 + transitionDirection * static_cast<int>(464 * (1.0f - eased)));
+  lv_obj_set_x(pages[transitionFromPage], 12 - transitionDirection * static_cast<int>(1000 * eased));
+  lv_obj_set_x(pages[transitionToPage], 12 + transitionDirection * static_cast<int>(1000 * (1.0f - eased)));
   if (progress >= 1.0f) {
     lv_obj_add_flag(pages[transitionFromPage], LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_x(pages[transitionFromPage], 8);
-    lv_obj_set_x(pages[transitionToPage], 8);
+    lv_obj_set_x(pages[transitionFromPage], 12);
+    lv_obj_set_x(pages[transitionToPage], 12);
     transitionFromPage = transitionToPage = -1;
   }
 }
@@ -624,6 +619,7 @@ void setGameSprite(const uint8_t grid[5][8], uint32_t tint) {
 
 void createGame(lv_obj_t *parent) {
   lv_obj_t *track = surface(parent, 0, 154, 464, 70, 10);
+  lv_obj_add_flag(track, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(track, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(track, gameTouchEvent, LV_EVENT_PRESSED, nullptr);
   gameTitle = label(track, "CLAWD RUNNER", &lv_font_montserrat_12, kCoral, 8, 4);
@@ -686,8 +682,8 @@ void createGame(lv_obj_t *parent) {
 
 void createAlertOverlay(lv_obj_t *screen) {
   alertOverlay = lv_obj_create(screen);
-  lv_obj_set_pos(alertOverlay, 4, 4);
-  lv_obj_set_size(alertOverlay, 472, 312);
+  lv_obj_set_pos(alertOverlay, 12, 10);
+  lv_obj_set_size(alertOverlay, 1000, 580);
   lv_obj_set_style_bg_color(alertOverlay, lv_color_hex(0x110506), 0);
   lv_obj_set_style_bg_opa(alertOverlay, LV_OPA_COVER, 0);
   lv_obj_set_style_border_color(alertOverlay, lv_color_hex(kDanger), 0);
@@ -745,25 +741,25 @@ void createUI() {
       lv_obj_set_style_radius(pixel, 0, 0);
     }
   }
-  lv_obj_t *brand = label(screen, "NOTCHAGENT / CF GAUSS", &lv_font_montserrat_14, kCoral, 42, 8);
+  lv_obj_t *brand = label(screen, "NOTCHAGENT DESK / REV A", &lv_font_montserrat_16, kCoral, 50, 14);
   styleTracking(brand, 2);
-  connectionLabel = label(screen, "WAITING", &lv_font_montserrat_12, kMuted, 366, 10);
-  lv_obj_set_width(connectionLabel, 104);
+  connectionLabel = label(screen, "WAITING", &lv_font_montserrat_14, kMuted, 800, 15);
+  lv_obj_set_width(connectionLabel, 208);
   lv_label_set_long_mode(connectionLabel, LV_LABEL_LONG_SCROLL_CIRCULAR);
   lv_obj_set_style_text_align(connectionLabel, LV_TEXT_ALIGN_RIGHT, 0);
   styleTracking(connectionLabel, 1);
   lv_obj_t *divider = lv_obj_create(screen);
   lv_obj_remove_flag(divider, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_pos(divider, 8, 40);
-  lv_obj_set_size(divider, 464, 2);
+  lv_obj_set_pos(divider, 12, 54);
+  lv_obj_set_size(divider, 1000, 2);
   lv_obj_set_style_bg_color(divider, lv_color_hex(kCoral), 0);
   lv_obj_set_style_border_width(divider, 0, 0);
 
   const char *titles[kPageCount] = {"NOW", "BURN", "RHYTHM", "MODELS"};
   for (int i = 0; i < kPageCount; ++i) {
     pages[i] = lv_obj_create(screen);
-    lv_obj_set_pos(pages[i], 8, 44);
-    lv_obj_set_size(pages[i], 464, 224);
+    lv_obj_set_pos(pages[i], 12, 64);
+    lv_obj_set_size(pages[i], 1000, 464);
     lv_obj_set_style_bg_color(pages[i], lv_color_hex(kPanel), 0);
     lv_obj_set_style_border_width(pages[i], 0, 0);
     lv_obj_set_style_pad_all(pages[i], 0, 0);
@@ -771,8 +767,8 @@ void createUI() {
   }
   for (int i = 0; i < kPageCount; ++i) {
     navButtons[i] = lv_button_create(screen);
-    lv_obj_set_pos(navButtons[i], 5 + i * 117, 272);
-    lv_obj_set_size(navButtons[i], 115, 44);
+    lv_obj_set_pos(navButtons[i], 12 + i * 250, 536);
+    lv_obj_set_size(navButtons[i], 250, 60);
     lv_obj_set_style_bg_color(navButtons[i], lv_color_hex(kPanel), 0);
     lv_obj_set_style_bg_opa(navButtons[i], LV_OPA_COVER, 0);
     lv_obj_set_style_shadow_width(navButtons[i], 0, 0);
@@ -785,7 +781,7 @@ void createUI() {
     lv_obj_align(navLabels[i], LV_ALIGN_CENTER, 0, 2);
     navIndicators[i] = lv_obj_create(navButtons[i]);
     lv_obj_remove_flag(navIndicators[i], LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_size(navIndicators[i], 34, 3);
+    lv_obj_set_size(navIndicators[i], 56, 4);
     lv_obj_align(navIndicators[i], LV_ALIGN_TOP_MID, 0, 1);
     lv_obj_set_style_bg_color(navIndicators[i], lv_color_hex(kCoral), 0);
     lv_obj_set_style_border_width(navIndicators[i], 0, 0);
@@ -793,32 +789,44 @@ void createUI() {
   }
 
   for (int i = 0; i < 2; ++i) {
-    lv_obj_t *card = surface(pages[0], i * 232, 0, 226, 148, 12);
-    providerNames[i] = label(card, "--", &lv_font_montserrat_12, kMuted, 12, 7);
+    lv_obj_t *card = surface(pages[0], i * 504, 0, 496, 280, 16);
+    providerNames[i] = label(card, "--", &lv_font_montserrat_14, kMuted, 20, 16);
     styleTracking(providerNames[i], 2);
-    providerValues[i] = label(card, "--", &lv_font_montserrat_40, kText, 12, 25);
-    providerCaptions[i] = label(card, "WAITING FOR DATA", &lv_font_montserrat_12, kMuted, 12, 70);
+    providerValues[i] = label(card, "--", &lv_font_montserrat_48, kText, 20, 48);
+    providerCaptions[i] = label(card, "WAITING FOR DATA", &lv_font_montserrat_14, kMuted, 20, 102);
     styleTracking(providerCaptions[i], 1);
     for (int segment = 0; segment < 10; ++segment) {
       providerGauge[i][segment] = lv_obj_create(card);
-      lv_obj_set_pos(providerGauge[i][segment], 12 + segment * 19, 91);
-      lv_obj_set_size(providerGauge[i][segment], 15, 8);
+      lv_obj_set_pos(providerGauge[i][segment], 20 + segment * 44, 140);
+      lv_obj_set_size(providerGauge[i][segment], 36, 12);
       lv_obj_set_style_bg_color(providerGauge[i][segment], lv_color_hex(kRaised), 0);
       lv_obj_set_style_border_width(providerGauge[i][segment], 0, 0);
       lv_obj_set_style_radius(providerGauge[i][segment], 2, 0);
     }
-    providerDetails[i] = label(card, "", &lv_font_montserrat_12, kMuted, 12, 108);
-    providerStatuses[i] = label(card, "NO DATA", &lv_font_montserrat_12, kMuted, 12, 130);
+    providerDetails[i] = label(card, "", &lv_font_montserrat_14, kMuted, 20, 176);
+    providerResets[i] = label(card, "RESET / UNKNOWN", &lv_font_montserrat_14, kMuted, 20, 210);
+    providerStatuses[i] = label(card, "NO DATA", &lv_font_montserrat_14, kMuted, 20, 244);
     styleTracking(providerStatuses[i], 1);
   }
 
-  lv_obj_t *burnCard = surface(pages[1], 0, 0, 464, 224, 14);
-  lv_obj_t *burnTitle = label(burnCard, "BURN FORECAST", &lv_font_montserrat_12, kCoral, 14, 10);
+  lv_obj_t *glanceCard = surface(pages[0], 0, 296, 1000, 168, 16);
+  lv_obj_t *burnGlanceTitle = label(glanceCard, "BURN / CURRENT PACE", &lv_font_montserrat_14, kCoral, 24, 22);
+  styleTracking(burnGlanceTitle, 1);
+  nowBurnSummary = label(glanceCard, "WAITING FOR BURN DATA", &lv_font_montserrat_24, kText, 24, 58);
+  lv_obj_set_width(nowBurnSummary, 450);
+  lv_obj_t *modelGlanceTitle = label(glanceCard, "MODELS / ACTIVE MIX", &lv_font_montserrat_14, kCoral, 524, 22);
+  styleTracking(modelGlanceTitle, 1);
+  nowModelSummary = label(glanceCard, "WAITING FOR MODEL DATA", &lv_font_montserrat_24, kText, 524, 58);
+  lv_obj_set_width(nowModelSummary, 450);
+  label(glanceCard, "Tap BURN or MODELS for detail", &lv_font_montserrat_14, kMuted, 24, 124);
+
+  lv_obj_t *burnCard = surface(pages[1], 0, 0, 1000, 464, 16);
+  lv_obj_t *burnTitle = label(burnCard, "BURN FORECAST", &lv_font_montserrat_14, kCoral, 28, 20);
   styleTracking(burnTitle, 1);
-  lv_obj_t *burnQuestion = label(burnCard, "WHAT IF I SWITCHED MODELS?", &lv_font_montserrat_12, kMuted, 178, 10);
+  lv_obj_t *burnQuestion = label(burnCard, "WHAT IF I SWITCHED MODELS?", &lv_font_montserrat_14, kMuted, 360, 20);
   styleTracking(burnQuestion, 1);
-  burnProvider = label(burnCard, "--", &lv_font_montserrat_12, kCoral, 366, 10);
-  lv_obj_set_width(burnProvider, 82);
+  burnProvider = label(burnCard, "--", &lv_font_montserrat_14, kCoral, 840, 20);
+  lv_obj_set_width(burnProvider, 120);
   lv_obj_set_style_text_align(burnProvider, LV_TEXT_ALIGN_RIGHT, 0);
 
   for (int i = 0; i < 4; ++i) {
@@ -828,11 +836,11 @@ void createUI() {
     lv_obj_set_style_line_rounded(burnLines[i], true, 0);
     lv_obj_add_flag(burnLines[i], LV_OBJ_FLAG_HIDDEN);
     burnLineLabels[i] = label(burnCard, "", &lv_font_montserrat_12, kMuted, 0, 0);
-    lv_obj_set_width(burnLineLabels[i], 60);
+    lv_obj_set_width(burnLineLabels[i], 96);
     lv_obj_set_style_text_align(burnLineLabels[i], LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_add_flag(burnLineLabels[i], LV_OBJ_FLAG_HIDDEN);
   }
-  burnEmptyLabel = label(burnCard, "NO MODEL DATA YET", &lv_font_montserrat_16, kMuted, 14, 96);
+  burnEmptyLabel = label(burnCard, "NO MODEL DATA YET", &lv_font_montserrat_24, kMuted, 28, 220);
 
   burnScrubCrosshair = lv_line_create(burnCard);
   lv_obj_remove_flag(burnScrubCrosshair, LV_OBJ_FLAG_CLICKABLE);
@@ -858,29 +866,29 @@ void createUI() {
   lv_obj_add_event_cb(burnCard, burnScrubEvent, LV_EVENT_RELEASED, nullptr);
   lv_obj_add_event_cb(burnCard, burnScrubEvent, LV_EVENT_PRESS_LOST, nullptr);
 
-  lv_obj_t *rhythmTitle = label(pages[2], "RHYTHM  /  WHEN DO I WORK MOST?", &lv_font_montserrat_12, kCoral, 4, 5);
+  lv_obj_t *rhythmTitle = label(pages[2], "RHYTHM  /  WHEN DO I WORK MOST?", &lv_font_montserrat_14, kCoral, 8, 8);
   styleTracking(rhythmTitle, 1);
-  lv_obj_t *rhythmScope = label(pages[2], "WEEKLY PATTERN", &lv_font_montserrat_12, kMuted, 330, 5);
-  lv_obj_set_width(rhythmScope, 130);
+  lv_obj_t *rhythmScope = label(pages[2], "WEEKLY PATTERN", &lv_font_montserrat_14, kMuted, 820, 8);
+  lv_obj_set_width(rhythmScope, 170);
   lv_obj_set_style_text_align(rhythmScope, LV_TEXT_ALIGN_RIGHT, 0);
   const char *rhythmCaptions[3] = {"PEAK HOUR", "WEEK TOTAL", "STRONGEST"};
-  const int rhythmMetricX[3] = {0, 156, 312};
+  const int rhythmMetricX[3] = {0, 336, 672};
   for (int metric = 0; metric < 3; ++metric) {
-    lv_obj_t *metricCard = surface(pages[2], rhythmMetricX[metric], 29, metric == 2 ? 152 : 148, 50, 8);
+    lv_obj_t *metricCard = surface(pages[2], rhythmMetricX[metric], 42, metric == 2 ? 328 : 320, 92, 10);
     lv_obj_set_style_bg_color(metricCard, lv_color_hex(kPanel), 0);
-    lv_obj_t *caption = label(metricCard, rhythmCaptions[metric], &lv_font_montserrat_12, kMuted, 10, 7);
+    lv_obj_t *caption = label(metricCard, rhythmCaptions[metric], &lv_font_montserrat_14, kMuted, 18, 14);
     styleTracking(caption, 1);
-    rhythmMetricValues[metric] = label(metricCard, "--", &lv_font_montserrat_16, kText, 10, 25);
-    lv_obj_set_width(rhythmMetricValues[metric], metric == 2 ? 132 : 128);
+    rhythmMetricValues[metric] = label(metricCard, "--", &lv_font_montserrat_24, kText, 18, 46);
+    lv_obj_set_width(rhythmMetricValues[metric], metric == 2 ? 292 : 284);
     lv_label_set_long_mode(rhythmMetricValues[metric], LV_LABEL_LONG_CLIP);
   }
-  lv_obj_t *flowLabel = label(pages[2], "HOURLY TOKEN FLOW", &lv_font_montserrat_12, kMuted, 4, 88);
+  lv_obj_t *flowLabel = label(pages[2], "HOURLY TOKEN FLOW", &lv_font_montserrat_14, kMuted, 8, 150);
   styleTracking(flowLabel, 1);
-  const int rhythmGridY[3] = {105, 150, 196};
+  const int rhythmGridY[3] = {190, 300, 410};
   for (int grid = 0; grid < 3; ++grid) {
     lv_obj_t *line = lv_obj_create(pages[2]);
-    lv_obj_set_pos(line, 4, rhythmGridY[grid]);
-    lv_obj_set_size(line, 456, 1);
+    lv_obj_set_pos(line, 8, rhythmGridY[grid]);
+    lv_obj_set_size(line, 980, 1);
     lv_obj_set_style_bg_color(line, lv_color_hex(kRaised), 0);
     lv_obj_set_style_bg_opa(line, grid == 2 ? LV_OPA_COVER : LV_OPA_50, 0);
     lv_obj_set_style_border_width(line, 0, 0);
@@ -894,11 +902,11 @@ void createUI() {
     lv_obj_set_style_border_width(rhythmBars[i], 0, 0);
     lv_obj_set_style_radius(rhythmBars[i], 2, 0);
   }
-  label(pages[2], "00", &lv_font_montserrat_12, kMuted, 4, 204);
-  label(pages[2], "06", &lv_font_montserrat_12, kMuted, 116, 204);
-  label(pages[2], "12", &lv_font_montserrat_12, kMuted, 232, 204);
-  label(pages[2], "18", &lv_font_montserrat_12, kMuted, 346, 204);
-  label(pages[2], "23", &lv_font_montserrat_12, kMuted, 442, 204);
+  label(pages[2], "00", &lv_font_montserrat_12, kMuted, 12, 438);
+  label(pages[2], "06", &lv_font_montserrat_12, kMuted, 252, 438);
+  label(pages[2], "12", &lv_font_montserrat_12, kMuted, 492, 438);
+  label(pages[2], "18", &lv_font_montserrat_12, kMuted, 732, 438);
+  label(pages[2], "23", &lv_font_montserrat_12, kMuted, 932, 438);
 
   rhythmCurrentHourProjection = lv_obj_create(pages[2]);
   lv_obj_remove_flag(rhythmCurrentHourProjection, LV_OBJ_FLAG_CLICKABLE);
@@ -936,20 +944,20 @@ void createUI() {
   lv_obj_add_event_cb(pages[2], rhythmScrubEvent, LV_EVENT_RELEASED, nullptr);
   lv_obj_add_event_cb(pages[2], rhythmScrubEvent, LV_EVENT_PRESS_LOST, nullptr);
 
-  lv_obj_t *modelsTitle = label(pages[3], "MODELS  /  WHO IS DOING THE WORK?", &lv_font_montserrat_12, kCoral, 4, 5);
+  lv_obj_t *modelsTitle = label(pages[3], "MODELS  /  WHO IS DOING THE WORK?", &lv_font_montserrat_14, kCoral, 8, 8);
   styleTracking(modelsTitle, 1);
-  modelSummary = label(pages[3], "0 TRACKED", &lv_font_montserrat_12, kMuted, 284, 5);
-  lv_obj_set_width(modelSummary, 176);
+  modelSummary = label(pages[3], "0 TRACKED", &lv_font_montserrat_14, kMuted, 700, 8);
+  lv_obj_set_width(modelSummary, 290);
   lv_obj_set_style_text_align(modelSummary, LV_TEXT_ALIGN_RIGHT, 0);
   for (int i = 0; i < 4; ++i) {
-    modelRows[i] = surface(pages[3], 0, 34 + i * 47, 464, 42, 8);
+    modelRows[i] = surface(pages[3], 0, 48 + i * 102, 1000, 88, 10);
     // Row order is already rank order (Mac sorts models.tokens descending
     // before sending), so the "01"/"02" text this replaced was restating
     // position — the mascot fills that same slot with something the old
     // number couldn't say: how close to empty this model's pool is.
     modelMascot[i] = lv_obj_create(modelRows[i]);
     lv_obj_remove_flag(modelMascot[i], LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_pos(modelMascot[i], 6, 9);
+    lv_obj_set_pos(modelMascot[i], 18, 30);
     lv_obj_set_size(modelMascot[i], 31, 23);
     lv_obj_set_style_bg_opa(modelMascot[i], LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(modelMascot[i], 0, 0);
@@ -971,19 +979,19 @@ void createUI() {
         if (!kClawd[row][col]) lv_obj_add_flag(modelMascotPixels[i][row][col], LV_OBJ_FLAG_HIDDEN);
       }
     }
-    modelLabels[i] = label(modelRows[i], "NO MODEL", &lv_font_montserrat_14, kMuted, 42, 5);
-    lv_obj_set_width(modelLabels[i], 218);
+    modelLabels[i] = label(modelRows[i], "NO MODEL", &lv_font_montserrat_24, kMuted, 72, 16);
+    lv_obj_set_width(modelLabels[i], 400);
     lv_label_set_long_mode(modelLabels[i], LV_LABEL_LONG_CLIP);
-    modelTokenLabels[i] = label(modelRows[i], "--", &lv_font_montserrat_14, kMuted, 268, 5);
-    lv_obj_set_width(modelTokenLabels[i], 88);
+    modelTokenLabels[i] = label(modelRows[i], "--", &lv_font_montserrat_24, kMuted, 600, 16);
+    lv_obj_set_width(modelTokenLabels[i], 160);
     lv_obj_set_style_text_align(modelTokenLabels[i], LV_TEXT_ALIGN_RIGHT, 0);
-    modelStatusLabels[i] = label(modelRows[i], "NO DATA", &lv_font_montserrat_12, kMuted, 366, 7);
-    lv_obj_set_width(modelStatusLabels[i], 84);
+    modelStatusLabels[i] = label(modelRows[i], "NO DATA", &lv_font_montserrat_16, kMuted, 800, 18);
+    lv_obj_set_width(modelStatusLabels[i], 170);
     lv_obj_set_style_text_align(modelStatusLabels[i], LV_TEXT_ALIGN_RIGHT, 0);
     for (int segment = 0; segment < 10; ++segment) {
       modelGauge[i][segment] = lv_obj_create(modelRows[i]);
-      lv_obj_set_pos(modelGauge[i][segment], 42 + segment * 18, 29);
-      lv_obj_set_size(modelGauge[i][segment], 14, 5);
+      lv_obj_set_pos(modelGauge[i][segment], 72 + segment * 44, 58);
+      lv_obj_set_size(modelGauge[i][segment], 36, 8);
       lv_obj_set_style_bg_color(modelGauge[i][segment], lv_color_hex(kRaised), 0);
       lv_obj_set_style_border_width(modelGauge[i][segment], 0, 0);
       lv_obj_set_style_radius(modelGauge[i][segment], 1, 0);
@@ -1020,6 +1028,20 @@ void compactTokens(int64_t tokens, char *output, size_t capacity) {
   else if (tokens >= 1000000LL) snprintf(output, capacity, "%.1fM", tokens / 1000000.0);
   else if (tokens >= 1000LL) snprintf(output, capacity, "%.1fK", tokens / 1000.0);
   else snprintf(output, capacity, "%" PRId64, tokens);
+}
+
+void formatReset(uint64_t resetEpochMs, char *output, size_t capacity) {
+  if (!resetEpochMs || !snapshotEpochMs) {
+    strlcpy(output, "RESET / UNKNOWN", capacity);
+    return;
+  }
+  if (resetEpochMs <= snapshotEpochMs) {
+    strlcpy(output, "RESET / DUE NOW", capacity);
+    return;
+  }
+  const uint64_t minutes = (resetEpochMs - snapshotEpochMs) / 60000;
+  if (minutes < 120) snprintf(output, capacity, "RESET / %llu MIN", minutes);
+  else snprintf(output, capacity, "RESET / %lluH %02lluM", minutes / 60, minutes % 60);
 }
 
 uint32_t alertColor(uint8_t threshold) {
@@ -1385,7 +1407,7 @@ void updateBurnLines() {
 
     lv_label_set_text(burnLineLabels[series], seriesName);
     lv_obj_set_style_text_color(burnLineLabels[series], lv_color_hex(color), 0);
-    lv_obj_set_pos(burnLineLabels[series], chartRight - 60, labelY);
+    lv_obj_set_pos(burnLineLabels[series], chartRight - 96, labelY);
     lv_obj_remove_flag(burnLineLabels[series], LV_OBJ_FLAG_HIDDEN);
   }
 }
@@ -1406,6 +1428,7 @@ void refreshUI() {
       lv_label_set_text(providerValues[slot], "--");
       lv_label_set_text(providerCaptions[slot], "WAITING FOR DATA");
       lv_label_set_text(providerDetails[slot], "");
+      lv_label_set_text(providerResets[slot], "RESET / UNKNOWN");
       lv_label_set_text(providerStatuses[slot], "NO DATA");
       for (int segment = 0; segment < 10; ++segment)
         lv_obj_set_style_bg_color(providerGauge[slot][segment], lv_color_hex(kRaised), 0);
@@ -1431,6 +1454,9 @@ void refreshUI() {
     if (provider.burn > 0) snprintf(detail, sizeof(detail), "%s TOKENS  /  +%.1f%%/H", tokenText, provider.burn);
     else snprintf(detail, sizeof(detail), "%s TOKENS  /  STABLE", tokenText);
     lv_label_set_text(providerDetails[slot], detail);
+    char reset[40];
+    formatReset(provider.resetEpochMs, reset, sizeof(reset));
+    lv_label_set_text(providerResets[slot], reset);
     char status[40];
     snprintf(status, sizeof(status), "[%s]  %s", attentionText(provider.attention), provider.refresh);
     lv_label_set_text(providerStatuses[slot], status);
@@ -1443,6 +1469,16 @@ void refreshUI() {
   }
 
   updateBurnLines();
+  float fastestBurn = 0;
+  for (size_t i = 0; i < providerCount; ++i) fastestBurn = max(fastestBurn, providers[i].burn);
+  char burnSummary[64];
+  if (hasDominantModel && fastestBurn > 0)
+    snprintf(burnSummary, sizeof(burnSummary), "%s  /  +%.1f%% PER HOUR", dominantModelShortName, fastestBurn);
+  else if (hasDominantModel)
+    snprintf(burnSummary, sizeof(burnSummary), "%s  /  STABLE", dominantModelShortName);
+  else
+    strlcpy(burnSummary, "WAITING FOR BURN DATA", sizeof(burnSummary));
+  lv_label_set_text(nowBurnSummary, burnSummary);
 
   int64_t peak = 1;
   int peakHour = 0;
@@ -1510,6 +1546,7 @@ void refreshUI() {
                            static_cast<unsigned>(modelCount), totalModelText);
   else strlcpy(modelSummaryText, "0 TRACKED  /  WAITING", sizeof(modelSummaryText));
   lv_label_set_text(modelSummary, modelSummaryText);
+  lv_label_set_text(nowModelSummary, modelSummaryText);
   // Haiku/Sonnet/Opus share one pool (see the equivalent comment on the
   // macOS app's distressLevel(health:quota:)) — the Desk protocol doesn't
   // carry a separate per-model quota, so every row's mascot reflects this
@@ -1740,6 +1777,9 @@ void handleFrame(const desk_protocol::FrameView &frame) {
     acknowledgement["protocolMinor"] = DESK_PROTOCOL_MINOR;
     acknowledgement["nonce"] = hello["nonce"].as<uint32_t>();
     acknowledgement["firmwareVersion"] = DESK_FW_VERSION;
+    acknowledgement["hardwareModel"] = DESK_HARDWARE_MODEL;
+    acknowledgement["hardwareRevision"] = DESK_HARDWARE_REVISION;
+    acknowledgement["displayProfile"] = DESK_DISPLAY_PROFILE;
     const size_t acknowledgementLength = serializeJson(acknowledgement, decodedBuffer, DESK_MAX_PAYLOAD + 32);
     desk_protocol::writeFrame(Serial, desk_protocol::HelloAcknowledgement, ++outgoingSequence,
                               decodedBuffer, acknowledgementLength, packetBuffer,
@@ -1792,6 +1832,9 @@ void sendDeviceTelemetry() {
   if (!hostRecognized) return;
   JsonDocument document;
   document["firmwareVersion"] = DESK_FW_VERSION;
+  document["hardwareModel"] = DESK_HARDWARE_MODEL;
+  document["hardwareRevision"] = DESK_HARDWARE_REVISION;
+  document["displayProfile"] = DESK_DISPLAY_PROFILE;
   document["uptimeSeconds"] = millis() / 1000ULL;
   document["freeHeapBytes"] = ESP.getFreeHeap();
   document["minimumFreeHeapBytes"] = ESP.getMinFreeHeap();
@@ -1819,7 +1862,7 @@ void updateFreshness() {
   // must never be erased merely because refreshes are suspended.
   if (paused) {
     lv_label_set_text(connectionLabel, "PAUSED");
-    ledcWrite(DESK_TFT_BACKLIGHT, 150);
+    desk_board::setBacklight(150);
     return;
   }
   const uint32_t age = millis() - lastSnapshotMs;
@@ -1828,9 +1871,9 @@ void updateFreshness() {
     lv_label_set_text(connectionLabel, "DATA CLEARED");
   } else if (age > DESK_STALE_MS) {
     lv_label_set_text(connectionLabel, "STALE");
-    ledcWrite(DESK_TFT_BACKLIGHT, 70);
+    desk_board::setBacklight(70);
   } else {
-    ledcWrite(DESK_TFT_BACKLIGHT, 210);
+    desk_board::setBacklight(210);
   }
 }
 
@@ -1844,26 +1887,19 @@ void setup() {
   encodedBuffer = static_cast<uint8_t *>(heap_caps_malloc(DESK_MAX_PAYLOAD + 128, MALLOC_CAP_SPIRAM));
   if (!packetBuffer || !decodedBuffer || !encodedBuffer) while (true) delay(1000);
 
-  Arduino_DataBus *bus = new Arduino_ESP32QSPI(DESK_TFT_CS, DESK_TFT_SCK, DESK_TFT_D0,
-                                                DESK_TFT_D1, DESK_TFT_D2, DESK_TFT_D3);
-  Arduino_GFX *panel = new Arduino_AXS15231B(bus, GFX_NOT_DEFINED, 0, false, 320, 480);
-  canvas = new Arduino_Canvas(320, 480, panel, 0, 0, 0);
-  if (!canvas->begin(40000000UL)) while (true) delay(1000);
-  canvas->fillScreen(0);
-  canvas->flush();
-  canvasPixels = canvas->getFramebuffer();
-
-  ledcAttach(DESK_TFT_BACKLIGHT, 5000, 8);
-  ledcWrite(DESK_TFT_BACKLIGHT, 210);
+  if (!desk_board::begin()) while (true) delay(1000);
+  desk_board::setBacklight(210);
+  void *displayBuffer1 = nullptr;
+  void *displayBuffer2 = nullptr;
+  if (!desk_display::begin(&displayBuffer1, &displayBuffer2)) while (true) delay(1000);
   touch.begin();
   lv_init();
   lv_tick_set_cb([]() -> uint32_t { return millis(); });
   const size_t displayBytes = DESK_SCREEN_WIDTH * DESK_SCREEN_HEIGHT * sizeof(lv_color_t);
-  lv_color_t *displayBuffer = static_cast<lv_color_t *>(heap_caps_malloc(displayBytes, MALLOC_CAP_SPIRAM));
-  if (!displayBuffer) while (true) delay(1000);
   lv_display_t *display = lv_display_create(DESK_SCREEN_WIDTH, DESK_SCREEN_HEIGHT);
   lv_display_set_flush_cb(display, displayFlush);
-  lv_display_set_buffers(display, displayBuffer, nullptr, displayBytes, LV_DISPLAY_RENDER_MODE_FULL);
+  lv_display_set_buffers(display, displayBuffer1, displayBuffer2, displayBytes,
+                         LV_DISPLAY_RENDER_MODE_DIRECT);
   lv_indev_t *input = lv_indev_create();
   lv_indev_set_type(input, LV_INDEV_TYPE_POINTER);
   lv_indev_set_read_cb(input, touchRead);

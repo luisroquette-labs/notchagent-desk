@@ -9,6 +9,8 @@ public sealed class DeskFrameCodecTests
     [Fact]
     public void FrameRoundTrips()
     {
+        Assert.Equal(4, DeskProtocolContract.Minor);
+        Assert.Equal("waveshare-esp32-s3-touch-lcd-7b", DeskProtocolContract.RevAHardwareModel);
         var payload = Encoding.UTF8.GetBytes("{\"product\":\"NotchAgent Desk\",\"nonce\":42}");
         var encoded = DeskFrameCodec.Encode(new DeskFrame(DeskFrameType.Hello, 7, payload));
 

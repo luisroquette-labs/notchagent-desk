@@ -2,13 +2,14 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$root/tools/semver.sh"
 version="$(tr -d '[:space:]' < "$root/VERSION")"
 protocol="$(tr -d '[:space:]' < "$root/PROTOCOL_VERSION")"
-firmware_version="$(sed -n 's/^#define DESK_FW_VERSION "\([0-9][0-9.]*\)"$/\1/p' "$root/firmware/notchagent_desk/config.h")"
+firmware_version="$(sed -n 's/^#define DESK_FW_VERSION "\([0-9A-Za-z.-]*\)"$/\1/p' "$root/firmware/notchagent_desk/config.h")"
 protocol_minor="$(sed -n 's/^#define DESK_PROTOCOL_MINOR \([0-9][0-9]*\)$/\1/p' "$root/firmware/notchagent_desk/config.h")"
 protocol_major="$(sed -n 's/^constexpr uint8_t kProtocolMajor = \([0-9][0-9]*\);$/\1/p' "$root/firmware/notchagent_desk/desk_protocol.h")"
 
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || {
+is_desk_semver "$version" || {
   echo "Invalid SemVer in VERSION: $version" >&2
   exit 1
 }

@@ -1,4 +1,4 @@
-# NotchAgent Desk Beta 1 BOM
+# NotchAgent Desk Rev A BOM
 
 > Migration note: the `Scripts/` commands referenced below currently remain in
 > the [NotchAgent host repository](https://github.com/luisroquette/notchagent/tree/master/Scripts)
@@ -8,15 +8,18 @@
 This BOM separates verified engineering requirements from purchasing decisions
 that still require a supplier sample and owner approval.
 
-## Verified core
+## Hardware contract
 
 | Item | Requirement | Status |
 |---|---|---|
-| Display controller | ESP32-S3 board, 7-inch 1024x600 capacitive touch (5-point) | Verified on prototype |
-| Flash / PSRAM | 16 MB flash, 8 MB OPI PSRAM | Verified by connected prototype |
-| Data link | Any USB data cable compatible with the board connector and the customer's Mac/dock | Verified function; commodity item, no fixed SKU |
-| Firmware | NotchAgent Desk factory image, protocol v1.1 | Build and recovery flow validated |
-| Mac software | NotchAgent macOS 14+ app with Desk firmware package | Build validated; notarization and public download pending |
+| Display controller | Waveshare ESP32-S3-Touch-LCD-7B, 1024x600 capacitive touch (5-point) | Rev A target; physical qualification pending |
+| Flash / PSRAM | ESP32-S3-WROOM-1-N16R8, 16 MB flash, 8 MB OPI PSRAM | Datasheet baseline; unit measurement pending |
+| Data link | Native USB-C data port; known-good USB data cable | Physical matrix pending |
+| Firmware | NotchAgent Desk `1.0.0-alpha.1`, protocol 1.4, manifest schema 3 | Build passes; physical qualification pending |
+| Legacy Prototype | Guition ESP32-S3 480x320 / AXS15231B | Immutable recovery release `0.8.0` |
+
+Battery, Rev B, Wi-Fi, BLE, microSD data storage, CAN and RS485 are outside the
+Rev A alpha scope.
 
 ## Purchasing gates
 
