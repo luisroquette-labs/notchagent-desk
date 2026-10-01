@@ -1,7 +1,7 @@
 # NotchAgent Desk Beta 1 BOM
 
 > Migration note: the `Scripts/` commands referenced below currently remain in
-> the [NotchAgent host repository](https://github.com/luisroquette/notchagent/tree/master/Scripts)
+> the [NotchAgent host repository](https://github.com/luisroquette-labs/notchagent/tree/master/Scripts)
 > because they join hardware and signed-app release evidence. This repository
 > owns the BOM and product gates.
 

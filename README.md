@@ -9,12 +9,12 @@
 <p align="center">
   <a href="https://img.shields.io/badge/version-v0.8.0-FF654F?style=flat-square"><img src="https://img.shields.io/badge/version-v0.8.0-FF654F?style=flat-square" alt="Version v0.8.0"></a>
   <a href="protocol/PROTOCOL.md"><img src="https://img.shields.io/badge/protocol-1.3-C9A7FF?style=flat-square" alt="Protocol 1.3"></a>
-  <a href="https://luisroquette.github.io/notchagent-desk/"><img src="https://img.shields.io/badge/product-page-live-38D6C7?style=flat-square" alt="Product page"></a>
+  <a href="https://luisroquette-labs.github.io/notchagent-desk/"><img src="https://img.shields.io/badge/product-page-live-38D6C7?style=flat-square" alt="Product page"></a>
   <a href="https://cfgauss.com.br/shop/notchagent-desk"><img src="https://img.shields.io/badge/buy-R%24_699%2C90-FF654F?style=flat-square" alt="Buy: R$ 699,90"></a>
 </p>
 
 NotchAgent Desk is the physical companion for
-[NotchAgent](https://github.com/luisroquette/notchagent): a handmade 7-inch
+[NotchAgent](https://github.com/luisroquette-labs/notchagent): a handmade 7-inch
 capacitive touch display (1024x600) that turns your local Claude Code and Codex quota data into
 a touch-first instrument — **NOW · BURN · RHYTHM · MODELS** — powered by an
 ESP32-S3 over USB-C. No cloud account, no telemetry, no credentials. The host
@@ -56,13 +56,13 @@ gauge: glance, don't check.
 ## Watch it work
 
 Full videos — installation, every screen, the exploded view and the handmade
-assembly — on the product page: **[luisroquette.github.io/notchagent-desk](https://luisroquette.github.io/notchagent-desk/)**.
+assembly — on the product page: **[luisroquette-labs.github.io/notchagent-desk](https://luisroquette-labs.github.io/notchagent-desk/)**.
 
 ## Product boundary
 
 | Product | Purpose | Platforms | Repository |
 |---|---|---|---|
-| **NotchAgent** | Native software gauge in the computer UI | macOS release · Windows preview | [`notchagent`](https://github.com/luisroquette/notchagent) |
+| **NotchAgent** | Native software gauge in the computer UI | macOS release · Windows preview | [`notchagent`](https://github.com/luisroquette-labs/notchagent) |
 | **NotchAgent Desk** | Physical ESP32-S3 touch display over USB | macOS Beta 1 · Windows beta | **this repository** |
 
 ## How it works
