@@ -1,7 +1,7 @@
 # NotchAgent Desk Beta 1 factory station
 
 > Migration note: the `Scripts/` commands referenced below currently remain in
-> the [NotchAgent host repository](https://github.com/luisroquette/notchagent/tree/master/Scripts)
+> the [NotchAgent host repository](https://github.com/luisroquette-labs/notchagent/tree/master/Scripts)
 > because they also sign and validate the desktop bundle. This repository owns
 > the factory contract; script extraction will occur without changing that contract.
 

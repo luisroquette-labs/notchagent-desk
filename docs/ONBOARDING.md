@@ -48,4 +48,4 @@ Canonical customer onboarding:
 <https://cfgauss.com.br/notchagent/instalar>
 
 Canonical compatibility contract:
-<https://github.com/luisroquette/notchagent-desk/blob/main/COMPATIBILITY.md>
+<https://github.com/luisroquette-labs/notchagent-desk/blob/main/COMPATIBILITY.md>

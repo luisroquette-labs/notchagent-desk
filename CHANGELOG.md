@@ -85,7 +85,7 @@ All notable changes to NotchAgent Desk are documented here. The format follows
 - The device receives sanitized snapshots only: no credentials, prompts,
   account identifiers, monetary amounts, or local file paths.
 
-[Unreleased]: https://github.com/luisroquette/notchagent-desk/compare/v0.8.0...HEAD
-[0.8.0]: https://github.com/luisroquette/notchagent-desk/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/luisroquette/notchagent-desk/compare/v0.6.16...v0.7.0
-[0.6.16]: https://github.com/luisroquette/notchagent-desk/releases/tag/v0.6.16
+[Unreleased]: https://github.com/luisroquette-labs/notchagent-desk/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/luisroquette-labs/notchagent-desk/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/luisroquette-labs/notchagent-desk/compare/v0.6.16...v0.7.0
+[0.6.16]: https://github.com/luisroquette-labs/notchagent-desk/releases/tag/v0.6.16
