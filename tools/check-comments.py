@@ -113,10 +113,14 @@ def hash_comments(text):
     for line in text.splitlines(keepends=True):
         quote = ""
         escaped = False
+        escaped_space = False
         for i, char in enumerate(line):
             if escaped:
                 escaped = False
+                escaped_space = char.isspace()
                 continue
+            if not char.isspace() and char != "#":
+                escaped_space = False
             if char == "\\" and quote != "'":
                 escaped = True
                 continue
@@ -125,7 +129,7 @@ def hash_comments(text):
                     quote = ""
             elif char in ("'", '"'):
                 quote = char
-            elif char == "#" and (i == 0 or line[i - 1].isspace()):
+            elif char == "#" and (i == 0 or line[i - 1].isspace()) and not escaped_space:
                 if not (pos == 0 and line.startswith("#!")):
                     found.append(pos + i)
                 break
@@ -140,6 +144,7 @@ assert not slash_comments('let value = #"// literal"#', "swift")
 assert slash_comments('a { color: red; /* remove */ }', "css")
 assert not hash_comments('#!/usr/bin/env bash\necho "# literal"\n')
 assert not hash_comments('echo "\\\" # literal"\n')
+assert not hash_comments('echo foo\\ #literal\n')
 assert hash_comments('# remove\n')
 
 
