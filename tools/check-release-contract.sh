@@ -40,4 +40,6 @@ if rg -n --hidden --glob '!.git/**' --glob '!tools/check-release-contract.sh' \
   exit 1
 fi
 
+python3 "$root/tools/check-comments.py"
+
 echo "PASS: NotchAgent Desk $version · protocol $protocol release contract"

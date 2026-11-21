@@ -18,33 +18,21 @@ constexpr uint32_t kMuted = 0x9E9EA6;
 constexpr uint32_t kOK = 0x7AC57F;
 constexpr uint32_t kWarning = 0xEFAA4E;
 constexpr uint32_t kDanger = 0xE5484D;
-// Copied verbatim from notchagent's Theme.swift (dark variant — this
-// device's background is fixed black). Not re-derived here; if the app's
-// validated palette changes, update these 4 to match.
 constexpr uint32_t kModelHaiku = 0x3987E5;
 constexpr uint32_t kModelSonnet = 0x199E70;
 constexpr uint32_t kModelOpus = 0x9085E9;
 constexpr uint32_t kModelFable = 0xD55181;
 constexpr uint64_t kResetBoundaryToleranceMs = 120000;
 constexpr int kPageCount = 4;
-// Burn-forecast chart plot area, in burnCard-local pixels. Shared by
-// updateBurnLines() (drawing) and burnScrubEvent() (touch readout) so the
-// two can never drift apart.
 constexpr int kBurnChartLeft = 14;
 constexpr int kBurnChartRight = 450;
 constexpr int kBurnChartTop = 40;
 constexpr int kBurnChartBottom = 208;
-// RHYTHM page's hourly-bar plot area, in pages[2]-local pixels. Shared by
-// the refresh loop (drawing) and rhythmScrubEvent() (touch readout).
 constexpr int kRhythmChartLeft = 5;
 constexpr int kRhythmBarPitch = 19;
 constexpr int kRhythmBarWidth = 11;
 constexpr int kRhythmChartBaseline = 195;
 constexpr int kRhythmChartMaxBarHeight = 88;
-// Below this, the current hour has barely started — extrapolating its
-// so-far total to a full hour would swing wildly. Same threshold and same
-// reasoning as RhythmChartView.currentHourGraceFraction on the macOS app,
-// so the two products agree on when "in progress" is worth showing.
 constexpr float kRhythmCurrentHourGraceFraction = 0.15f;
 
 struct ProviderState {
@@ -133,26 +121,17 @@ lv_obj_t *burnLines[4] = {};
 lv_obj_t *burnLineLabels[4] = {};
 lv_obj_t *burnEmptyLabel = nullptr;
 lv_point_precise_t burnLinePoints[4][48];
-// Touch scrubber: crosshair + dot + labeled bubble, shown while a finger is
-// down on the burn chart and hidden again on release — the touch equivalent
-// of the macOS app's hover readout.
 lv_obj_t *burnScrubCrosshair = nullptr;
 lv_obj_t *burnScrubDot = nullptr;
 lv_obj_t *burnScrubBubble = nullptr;
 lv_obj_t *burnScrubLabel = nullptr;
 lv_point_precise_t burnScrubCrosshairPoints[2];
-// Touch scrubber for the RHYTHM page — same shape as the burn scrubber
-// above, applied to the hourly bars instead of the burn lines.
 lv_obj_t *rhythmScrubCrosshair = nullptr;
 lv_obj_t *rhythmScrubHighlight = nullptr;
 lv_obj_t *rhythmScrubBubble = nullptr;
 lv_obj_t *rhythmScrubLabel = nullptr;
 lv_point_precise_t rhythmScrubCrosshairPoints[2];
 lv_obj_t *rhythmBars[24] = {};
-// Outline-only cap stacked above the current hour's real bar: honest
-// stand-in for BurnChartView's dashed projection line (LVGL has no cheap
-// dashed-border primitive here) — the hollow portion reads as "not lived
-// yet," matching the real vs. projected split that page already uses.
 lv_obj_t *rhythmCurrentHourProjection = nullptr;
 lv_obj_t *rhythmMetricValues[3] = {};
 lv_obj_t *modelSummary = nullptr;
@@ -161,21 +140,9 @@ lv_obj_t *modelLabels[4] = {};
 lv_obj_t *modelTokenLabels[4] = {};
 lv_obj_t *modelStatusLabels[4] = {};
 lv_obj_t *modelGauge[4][10] = {};
-// One breathing Clawd mascot per model row, reusing the exact kClawd bitmap
-// the alert overlay already draws — same character, same source of truth,
-// not a second mascot invented for this page. Each modelMascot[i] is a
-// transparent container (mirrors gameMascot/gamePixels below) so animating
-// the breath is one lv_obj_set_y per row, not 48 individual pixel moves.
 lv_obj_t *modelMascot[4] = {};
 lv_obj_t *modelMascotPixels[4][6][8] = {};
-// 0-1 per row, refreshed in refreshUI() from real quota state; read every
-// animation tick by updateModelMascotAnimation() so the breath rate/depth
-// always tracks the live number, never a value baked in at creation time.
 float modelMascotDistress[4] = {};
-// False only when there's genuinely no shared-pool reading yet (provider
-// not found / not yet reported) — read by updateModelMascotAnimation() to
-// freeze the breath instead of animating a fabricated "calm" from a 0 that
-// was never actually measured.
 bool modelMascotKnown[4] = {};
 lv_obj_t *gameMascot = nullptr;
 lv_obj_t *gamePixels[5][8] = {};
@@ -245,9 +212,6 @@ uint32_t colorForModelShortName(const char *shortName) {
   return kMuted;
 }
 
-// RGB-scale-toward-black by `scale` (1 = full color, 0 = black) — the same
-// operation as opacity-over-a-black-background, which is what the macOS
-// mascot actually does against its own black notch.
 uint32_t scaledColor(uint32_t base, float scale) {
   const float clampedScale = constrain(scale, 0.0f, 1.0f);
   const uint8_t r = static_cast<uint8_t>(((base >> 16) & 0xFF) * clampedScale);
@@ -256,8 +220,6 @@ uint32_t scaledColor(uint32_t base, float scale) {
   return (static_cast<uint32_t>(r) << 16) | (static_cast<uint32_t>(g) << 8) | b;
 }
 
-// Reproduces the macOS mascot's `tint.opacity(1 - distress * 0.35)` exactly
-// (opacity-over-black and RGB-scale-toward-black are the same operation).
 uint32_t distressedColor(uint32_t base, float distress) {
   return scaledColor(base, 1.0f - constrain(distress, 0.0f, 1.0f) * 0.35f);
 }
@@ -287,8 +249,6 @@ void displayFlush(lv_display_t *display, const lv_area_t *, uint8_t *pixels) {
   canvas->flush();
   const uint32_t renderedAt = millis();
   const uint32_t interval = lastRenderedAt ? renderedAt - lastRenderedAt : 0;
-  // Only consecutive animation frames measure render cadence. Isolated dirty
-  // updates on a static page must not be reported as a 1-2 FPS panel fault.
   if (interval > 0 && interval <= 250) {
     ++activeRenderIntervalCount;
     activeRenderIntervalTotalMs += interval;
@@ -370,9 +330,6 @@ void navigatePage(int page) {
 
 void updatePageTransition() {
   if (transitionFromPage < 0) return;
-  // 260ms and a quartic ease-out (was 180ms/cubic) — same shape as the
-  // macOS pager's slower, near-zero-bounce spring: a deliberate glide
-  // instead of a quick, slightly springy snap.
   const float progress = min(1.0f, (millis() - transitionStartedAt) / 260.0f);
   const float eased = 1.0f - powf(1.0f - progress, 4.0f);
   lv_obj_set_x(pages[transitionFromPage], 8 - transitionDirection * static_cast<int>(464 * eased));
@@ -441,13 +398,6 @@ void alertTouchEvent(lv_event_t *) {
   dismissDeskAlert();
 }
 
-// Touch equivalent of the macOS app's BurnChartView hover scrubber: while a
-// finger is on the burn chart, shows which line (dominant model or a
-// what-if alternate) is closest to the touch point, and how far along that
-// model's projection is at that point in time — and keeps re-picking the
-// nearest line on every PRESSING tick, so dragging across the chart
-// re-targets whichever line the finger is actually over instead of
-// sticking to whatever line was closest at touch-down.
 void burnScrubEvent(lv_event_t *event) {
   const lv_event_code_t code = lv_event_get_code(event);
   if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
@@ -480,10 +430,6 @@ void burnScrubEvent(lv_event_t *event) {
   const float basePercent = burnUsedPercent[i0] + (burnUsedPercent[i1] - burnUsedPercent[i0]) * indexFrac;
   const float ageSeconds = burnAgeSeconds[i0] + (burnAgeSeconds[i1] - burnAgeSeconds[i0]) * indexFrac;
 
-  // Same "nearest line to the pointer" rule as the macOS app: interpolate
-  // every visible series (dominant + alternates) at this x, then pick
-  // whichever one's y is closest to the touch point instead of always
-  // reporting the dominant model regardless of where the finger lands.
   const size_t seriesCount = 1 + burnAlternateCount;
   size_t bestSeries = 0;
   float bestDistance = 1e9f;
@@ -534,15 +480,8 @@ void burnScrubEvent(lv_event_t *event) {
   lv_obj_remove_flag(burnScrubBubble, LV_OBJ_FLAG_HIDDEN);
 }
 
-// Forward declaration: defined further down, but needed here because this
-// sketch's functions live inside an anonymous namespace, which the
-// arduino-cli ctags prototype pass doesn't reach into.
 void compactTokens(int64_t tokens, char *output, size_t capacity);
 
-// Touch scrubber for the RHYTHM page's hourly bars — same "closest thing to
-// the finger, re-picked on every PRESSING tick" contract as burnScrubEvent
-// above, applied to a bar chart instead of line series: outlines the
-// touched hour's bar and shows its exact token count.
 void rhythmScrubEvent(lv_event_t *event) {
   const lv_event_code_t code = lv_event_get_code(event);
   if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
@@ -943,10 +882,6 @@ void createUI() {
   lv_obj_set_style_text_align(modelSummary, LV_TEXT_ALIGN_RIGHT, 0);
   for (int i = 0; i < 4; ++i) {
     modelRows[i] = surface(pages[3], 0, 34 + i * 47, 464, 42, 8);
-    // Row order is already rank order (Mac sorts models.tokens descending
-    // before sending), so the "01"/"02" text this replaced was restating
-    // position — the mascot fills that same slot with something the old
-    // number couldn't say: how close to empty this model's pool is.
     modelMascot[i] = lv_obj_create(modelRows[i]);
     lv_obj_remove_flag(modelMascot[i], LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_pos(modelMascot[i], 6, 9);
@@ -962,10 +897,6 @@ void createUI() {
         lv_obj_set_pos(modelMascotPixels[i][row][col], col * 4, row * 4);
         lv_obj_set_size(modelMascotPixels[i][row][col], 3, 3);
         lv_obj_set_style_border_width(modelMascotPixels[i][row][col], 0, 0);
-        // Rounded corners, not square — same soft-pixel-art convention as
-        // the macOS mascot (PixelGlyph.swift): reads as designed, not raw
-        // grid data. Eyes go fully circular there too (`Path(ellipseIn:)`);
-        // mirrored here with LV_RADIUS_CIRCLE on the 2 eye cells specifically.
         lv_obj_set_style_radius(modelMascotPixels[i][row][col],
           kClawd[row][col] == 2 ? LV_RADIUS_CIRCLE : 1, 0);
         if (!kClawd[row][col]) lv_obj_add_flag(modelMascotPixels[i][row][col], LV_OBJ_FLAG_HIDDEN);
@@ -1293,16 +1224,6 @@ void updateAlertAnimation() {
       lv_obj_set_x(alertMascotPixels[row][col], 28 + col * 10 + tremor);
 }
 
-// Breathing, one lv_obj_set_y per row (see the modelMascot[] comment at its
-// declaration) — calm and slow at rest, quick and shallow near empty, the
-// same physical metaphor and the same numbers as PixelGlyph.swift on the
-// Mac, so the two products' mascots move in the same language.
-// Real adult resting respiratory rate is clinically documented as
-// 12-20 breaths/min at rest, rising toward ~30/min at the rapid, visibly
-// out-of-breath end (tachypnea) — mapped directly to distress 0->1, same
-// two numbers as PixelGlyph.swift's calmBreathsPerSecond/
-// distressedBreathsPerSecond, so both products' mascots breathe at
-// identical, real rates instead of two independently hand-tuned curves.
 constexpr float kMascotCalmBreathsPerSecond = 12.0f / 60.0f;
 constexpr float kMascotDistressedBreathsPerSecond = 30.0f / 60.0f;
 
@@ -1310,8 +1231,6 @@ void updateModelMascotAnimation() {
   for (int i = 0; i < 4; ++i) {
     if (lv_obj_has_flag(modelMascot[i], LV_OBJ_FLAG_HIDDEN)) continue;
     if (!modelMascotKnown[i]) {
-      // Frozen, not breathing calmly — an unmeasured row must not look
-      // like a confidently resting one.
       lv_obj_set_y(modelMascot[i], 9);
       continue;
     }
@@ -1357,9 +1276,6 @@ void updateBurnLines() {
     const char *seriesName = isDominant ? dominantModelShortName : burnAlternates[series - 1].shortName;
     const uint32_t color = isDominant ? kCoral : colorForModelShortName(seriesName);
 
-    // Stop at the first point that reaches/exceeds 100% (clamped) instead of
-    // drawing a flat 100% tail for the rest of burnPointCount, matching the
-    // macOS app's BurnChartView.alternatePolyline behavior.
     size_t writtenCount = 0;
     for (size_t i = 0; i < burnPointCount; ++i) {
       const float scaledPercent = burnUsedPercent[i] * ratio;
@@ -1475,9 +1391,6 @@ void refreshUI() {
       total == 0 ? kRaised : i == peakHour ? kOK : kCoral), 0);
   }
 
-  // Current hour's bar is real only up to "now" — the hollow cap above it
-  // is a naive linear extrapolation to a full hour, shown only once there's
-  // enough of the hour elapsed to not be pure noise (kRhythmCurrentHourGraceFraction).
   const bool showCurrentHourProjection = rhythmCurrentHour >= 0 && rhythmCurrentHour < 24 &&
     rhythm[rhythmCurrentHour] > 0 && rhythmCurrentHourElapsedFraction >= kRhythmCurrentHourGraceFraction;
   if (showCurrentHourProjection) {
@@ -1510,15 +1423,7 @@ void refreshUI() {
                            static_cast<unsigned>(modelCount), totalModelText);
   else strlcpy(modelSummaryText, "0 TRACKED  /  WAITING", sizeof(modelSummaryText));
   lv_label_set_text(modelSummary, modelSummaryText);
-  // Haiku/Sonnet/Opus share one pool (see the equivalent comment on the
-  // macOS app's distressLevel(health:quota:)) — the Desk protocol doesn't
-  // carry a separate per-model quota, so every row's mascot reflects this
-  // one real shared gauge instead of fabricating a per-model number.
   const int claudeProviderIndex = findProvider("claude-code");
-  // -1 (ProviderState's own "not reported yet" sentinel) means genuinely no
-  // reading, not a measured 0% — kept as its own flag rather than folded
-  // into sharedDistress, so a not-yet-connected provider can't render as a
-  // confidently calm mascot below.
   const bool claudeKnown = claudeProviderIndex >= 0 && providers[claudeProviderIndex].remaining >= 0;
   const float claudeRemaining = claudeKnown ? providers[claudeProviderIndex].remaining : 0;
   const float sharedDistress = claudeKnown
@@ -1552,17 +1457,6 @@ void refreshUI() {
       lv_obj_set_style_text_color(modelLabels[i], lv_color_hex(kMuted), 0);
     }
     if (i < static_cast<int>(modelCount)) {
-      // Mascot droop/breath = quota-closeness only. "limited" used to also
-      // floor distress here — reverted: once the shared pool alone is
-      // already past the ear-droop threshold, that floor is a no-op and
-      // every mascot (including OK ones) collapses to the same maxed-out
-      // look. Haiku/Sonnet/Opus share one real quota number, so their
-      // droop/breath legitimately DO match each other — that isn't a bug.
-      // What makes the 4 cards visually distinct is tint: the same colors
-      // modelStatusLabels[i] already uses for OK/LIMITED/ERROR (kOK/
-      // kWarning/kDanger-family), reused here instead of a new palette, so
-      // a LIMITED card still reads as different from an OK one even when
-      // both currently share the same quota-closeness number.
       const bool isError = !strcmp(models[i].status, "error");
       const bool isLimited = !strcmp(models[i].status, "limited");
       const bool known = claudeKnown;
@@ -1571,10 +1465,6 @@ void refreshUI() {
       modelMascotKnown[i] = known;
       const bool dropEars = distress > 0.6f;
       const uint32_t tint = isError ? kMuted : isLimited ? kWarning : kCoral;
-      // Unknown: fixed dim, same tint — visually distinct from a confident
-      // calm mascot and from a distressed one, never "0 disguised as
-      // measured." 0.55 has no other meaning than "clearly dimmer than
-      // resting" — see asleep in PixelGlyph.swift.
       const uint32_t bodyColor = known ? distressedColor(tint, distress) : scaledColor(tint, 0.55f);
       lv_obj_remove_flag(modelMascot[i], LV_OBJ_FLAG_HIDDEN);
       for (int row = 0; row < 6; ++row) {
@@ -1695,9 +1585,6 @@ bool parseSnapshot(const uint8_t *payload, size_t length) {
     const int hour = item["hour"] | -1;
     if (hour >= 0 && hour < 24) rhythm[hour] = max<int64_t>(0, item["tokens"].as<int64_t>());
   }
-  // -1 sentinel (rather than clamping to 0-23) so an old app build that
-  // predates these two fields reads as "no current-hour info" instead of
-  // silently mislabeling hour 0 as in-progress.
   rhythmCurrentHour = document["currentHour"].is<int>() ? document["currentHour"].as<int>() : -1;
   rhythmCurrentHourElapsedFraction = constrain(
     document["currentHourElapsedFraction"] | 0.0f, 0.0f, 1.0f);
@@ -1815,8 +1702,6 @@ void sendDeviceTelemetry() {
 
 void updateFreshness() {
   if (!lastSnapshotMs) return;
-  // Pause intentionally freezes the last valid snapshot; it is not stale and
-  // must never be erased merely because refreshes are suspended.
   if (paused) {
     lv_label_set_text(connectionLabel, "PAUSED");
     ledcWrite(DESK_TFT_BACKLIGHT, 150);
@@ -1834,7 +1719,7 @@ void updateFreshness() {
   }
 }
 
-}  // namespace
+}
 
 void setup() {
   Serial.setRxBufferSize(DESK_MAX_PAYLOAD + 128);
@@ -1883,8 +1768,6 @@ void loop() {
   const uint32_t frameNow = millis();
   if (!fpsWindowStartedAt) fpsWindowStartedAt = frameNow;
   if (frameNow - fpsWindowStartedAt >= DESK_FPS_WINDOW_MS) {
-    // Require an actual animation burst. Sparse static-page invalidations are
-    // not a frame cadence and must not overwrite the last measured active FPS.
     if (activeRenderIntervalCount >= 3 && activeRenderIntervalTotalMs > 0) {
       measuredFPS = activeRenderIntervalCount * 1000.0f / activeRenderIntervalTotalMs;
     }

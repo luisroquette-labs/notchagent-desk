@@ -97,9 +97,6 @@ class DeskTouch {
       portEXIT_CRITICAL(&mux_);
       return;
     }
-    // This is the exact command validated by the board's known-good bring-up.
-    // Coordinate reads are IRQ-driven; periodic traffic only probes the I2C
-    // address so an idle panel cannot manufacture touch samples.
     const uint32_t elapsedSinceInterrupt = micros() - interruptAtMicros;
     if (elapsedSinceInterrupt < DESK_TOUCH_SETTLE_US) {
       delayMicroseconds(DESK_TOUCH_SETTLE_US - elapsedSinceInterrupt);
