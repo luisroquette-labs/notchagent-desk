@@ -119,7 +119,7 @@ def hash_comments(text):
                 escaped = False
                 escaped_space = char.isspace()
                 continue
-            if not char.isspace() and char != "#":
+            if char != "#":
                 escaped_space = False
             if char == "\\" and quote != "'":
                 escaped = True
@@ -145,6 +145,7 @@ assert slash_comments('a { color: red; /* remove */ }', "css")
 assert not hash_comments('#!/usr/bin/env bash\necho "# literal"\n')
 assert not hash_comments('echo "\\\" # literal"\n')
 assert not hash_comments('echo foo\\ #literal\n')
+assert hash_comments('echo foo\\  # real comment\n')
 assert hash_comments('# remove\n')
 
 
