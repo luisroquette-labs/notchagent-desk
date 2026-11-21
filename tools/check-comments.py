@@ -64,6 +64,9 @@ def slash_comments(text, style):
                 i = string_at(i)
                 previous = '"'
                 continue
+            if style == "cpp" and char == "'" and i > 0 and i + 1 < len(text) and text[i - 1] in "0123456789abcdefABCDEF" and text[i + 1] in "0123456789abcdefABCDEF":
+                i += 1
+                continue
             if char in ('"', "'", "`"):
                 i = string_at(i)
                 previous = char
@@ -109,7 +112,14 @@ def hash_comments(text):
     pos = 0
     for line in text.splitlines(keepends=True):
         quote = ""
+        escaped = False
         for i, char in enumerate(line):
+            if escaped:
+                escaped = False
+                continue
+            if char == "\\" and quote != "'":
+                escaped = True
+                continue
             if quote:
                 if char == quote:
                     quote = ""
@@ -125,9 +135,11 @@ def hash_comments(text):
 
 assert not slash_comments('auto url = "https://example.test/a//b";', "cpp")
 assert slash_comments('auto x = 1; // remove', "cpp")
+assert slash_comments("constexpr int n = 1'000; // remove", "cpp")
 assert not slash_comments('let value = #"// literal"#', "swift")
 assert slash_comments('a { color: red; /* remove */ }', "css")
 assert not hash_comments('#!/usr/bin/env bash\necho "# literal"\n')
+assert not hash_comments('echo "\\\" # literal"\n')
 assert hash_comments('# remove\n')
 
 
