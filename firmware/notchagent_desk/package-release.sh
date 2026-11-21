@@ -46,8 +46,6 @@ trap cleanup EXIT
 
 flags="-DLV_CONF_INCLUDE_SIMPLE -I${sketch_dir}"
 fqbn="esp32:esp32:esp32s3:PSRAM=opi,FlashSize=16M,PartitionScheme=custom,CDCOnBoot=cdc,USBMode=hwcdc,FlashMode=qio"
-# The sketch is valid ordered C++; generated Arduino prototypes are unnecessary.
-# Skipping legacy ctags avoids nondeterministic hangs in local and factory builds.
 arduino-cli compile --jobs 4 --warnings all --fqbn "$fqbn" \
   --build-property "tools.ctags.pattern=$sketch_dir/consume-stdin.sh" \
   --build-property "compiler.cpp.extra_flags=$flags" \

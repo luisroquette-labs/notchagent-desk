@@ -20,4 +20,4 @@
 #define LV_USE_BAR 1
 #define LV_USE_LINE 1
 
-#endif  // LV_CONF_H
+#endif

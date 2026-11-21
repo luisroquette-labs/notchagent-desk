@@ -131,4 +131,4 @@ inline bool writeFrame(Stream &serial, FrameType type, uint32_t sequence,
   return serial.write(encoded, encodedLength + 1) == encodedLength + 1;
 }
 
-}  // namespace desk_protocol
+}

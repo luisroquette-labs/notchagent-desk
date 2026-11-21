@@ -5,26 +5,33 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   contract:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Validate release and privacy contracts
         run: ./tools/check-release-contract.sh
 
   apple-protocol:
-    runs-on: macos-15
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Test Swift protocol SDK
         run: swift test --package-path sdk/apple
 
   windows-protocol:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-dotnet@d4c94342e560b34958eacfc5d055d21461ed1c5d
@@ -34,7 +41,8 @@ jobs:
         run: dotnet test sdk/dotnet/NotchAgent.Desk.Protocol.Tests/NotchAgent.Desk.Protocol.Tests.csproj --configuration Release
 
   firmware:
-    runs-on: macos-15
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Isolate Arduino libraries
